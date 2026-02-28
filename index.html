@@ -331,17 +331,21 @@
       .tipArrow.show{ display:block; }
 
       /* overlays */
-      .overlay{
-        position: fixed; inset: 0;
-        background: rgba(2,6,23,.45);
-        display:none;
-        align-items:flex-end;
-        justify-content:center;
-        z-index: 9999;
-      }
+     .overlay{
+  overscroll-behavior: contain;
+  position: fixed;
+  inset: 0;
+  background: rgba(2,6,23,.45);
+  display:none;
+  align-items:flex-end;
+  justify-content:center;
+  z-index: 9999;
+  pointer-events: auto;
+}
       .overlay.show{ display:flex; }
 
       .sheet{
+         touch-action: pan-y;
         width: min(980px, 100vw);
         max-height: 86vh;
         background: rgba(255,255,255,.98);
@@ -349,6 +353,7 @@
         border-radius: 22px 22px 0 0;
         box-shadow: var(--shadow);
         overflow:hidden;
+        pointer-events: auto;
       }
       .sheetHead{
         display:flex; align-items:center; justify-content:space-between; gap:10px;
@@ -364,7 +369,10 @@
       @media(min-width:820px){
         .sheetGrid{ grid-template-columns: .9fr 1.1fr; }
       }
-      .dayList{
+     .dayList, .dayView{
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
         max-height: 56vh;
         overflow:auto;
         border: 1px solid var(--border);
@@ -1170,9 +1178,6 @@
                 </div>
               </div>
 
-              <div class="hint" style="margin-top:10px;">
-                ถ้าเลย deadline แล้วจะไม่ให้โบนัสแม้จะมาเริ่มทีหลัง • ถ้าติด LOCKED ต้อง Unlock พร้อมเหตุผล (โบนัสจะโดนตัด)
-              </div>
             </div>
 
             <div class="cutWrap" id="cutWrap">
@@ -1223,10 +1228,7 @@
               <b>Cap:</b> Base cap ต่อ “Quest Name” ต่อวัน = 60 นาที (ชื่อซ้ำไม่ได้)
             </div>
 
-            <div class="hint" style="margin-top:8px;">
-              <b>Morning Gate (ถ้า ON และตั้ง Trigger แล้ว):</b>
-              Gate จะเริ่มบังคับเมื่อถึง Trigger Time • PASS เมื่อเควสแรกวิ่งครบ <b>3 นาที</b> • โบนัส +6 ถ้า PASS ภายใน <b>10 นาที</b>
-            </div>
+          
           </div>
         </div>
 
@@ -2537,7 +2539,7 @@
   function rqBuild7dStats(){
     const data = loadAll();
     const today = localDateKey();
-    const cats = ["Learning","Work/Project","Physical","Connection"];
+    const cats = ["Learning","Work/Project","Physical"];
     const stat = {};
     cats.forEach(c=> stat[c]={ minutes:0, count:0 });
 
@@ -2555,7 +2557,7 @@
   }
   function rqChooseCategoryByBalance(){
     const stats = rqBuild7dStats();
-    const cats = ["Learning","Work/Project","Physical","Connection"];
+    const cats = ["Learning","Work/Project","Physical"];
     const maxMin = Math.max(...cats.map(c => stats[c]?.minutes || 0), 1);
 
     const scored = cats.map(c=>{
@@ -3080,17 +3082,29 @@
   let selectedDay = null;
 
   function openHistory(){
-    const days = listDays();
-    if(days.length===0){
-      showTimerWarn("ยังไม่มีข้อมูลย้อนหลัง");
-      return;
-    }
-    el.overlay.classList.add("show");
-    selectedDay = selectedDay || localDateKey();
-    renderHistoryDays();
-    renderDayView(selectedDay);
+  const days = listDays();
+  if(days.length===0){
+    showTimerWarn("ยังไม่มีข้อมูลย้อนหลัง");
+    return;
   }
-  function closeHistory(){ el.overlay.classList.remove("show"); }
+
+  el.overlay.classList.add("show");
+
+  // ✅ กัน scroll หลุดไปหน้า app บนมือถือ
+  document.body.style.overflow = "hidden";
+  el.appScroll.style.overflow = "hidden";
+
+  selectedDay = selectedDay || localDateKey();
+  renderHistoryDays();
+  renderDayView(selectedDay);
+}
+ function closeHistory(){
+  el.overlay.classList.remove("show");
+
+  // ✅ คืนค่าเดิม
+  document.body.style.overflow = "";
+  el.appScroll.style.overflow = "";
+}
 
   function renderHistoryDays(){
     const days = listDays();
@@ -3243,7 +3257,8 @@
   2) Trigger ถูกล็อก 7 วันหลังตั้ง
   3) Limit = 10 นาที (fix) • Qualify = 3 นาที (fix)
   4) กันโกง: ถ้าตั้งหลัง Trigger วันนี้ → เริ่มใช้พรุ่งนี้
-  5) ผ่าน = เควสแรกวิ่งครบ 3 นาทีภายใน 10 นาที → โบนัส +6` },
+  5) ผ่าน = เควสแรกวิ่งครบ 3 นาทีภายใน 10 นาที → โบนัส +6
+ 6) ถ้าเลย deadline แล้วจะไม่ให้โบนัสแม้จะมาเริ่มทีหลัง ถ้าติด LOCKED ต้อง Unlock พร้อมเหตุผล (โบนัสจะโดนตัด)` },
     random: { title:"Random Quest (v0.6.2)", body:
   `ใช้หลัง Morning Gate PASS หรือใช้กัน plan switching
   สุ่มแล้วติด cooldown 30 นาทีทันที
