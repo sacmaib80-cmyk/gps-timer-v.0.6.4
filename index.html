@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>QPS Timer v0.6.5</title>
+    <title>QPS Timer v0.6.6</title>
 
     <style>
       :root{
@@ -1242,6 +1242,23 @@
   #gatePage .pillSwitch{ width: 100%; }
   #gatePage .gateTitle{ font-size: 17px; }
 }
+.diceFab{
+  bottom: calc(110px + env(safe-area-inset-bottom, 0px)) !important;
+  right:  calc(12px + env(safe-area-inset-right, 0px)) !important;
+}
+.draftHint{
+  font-size:11px;
+  color:#64748b;
+  margin-top:4px;
+  animation: fadeDraft .3s ease;
+}
+
+@keyframes fadeDraft{
+  from{opacity:0; transform:translateY(-2px);}
+  to{opacity:1; transform:translateY(0);}
+}
+
+
     </style>
   </head>
 
@@ -1306,7 +1323,7 @@
           <div class="topbarRow">
             <div class="brand">
               <h1>
-                QPS Timer v0.6.5
+                QPS Timer v0.6.6
                 <button class="helpBtn" type="button" data-tip="top">?</button>
               </h1>
               <div class="sub" id="todayText">Today: ----</div>
@@ -1535,6 +1552,10 @@
             <div style="margin-top:10px;">
               <label for="notes">Notes</label>
               <textarea id="notes" placeholder="ทำอะไร/ได้ insight อะไร/เปลี่ยนพฤติกรรมไหม"></textarea>
+
+              <div class="draftHint" id="draftHint" style="display:none;">
+  Draft saved automatically
+</div>
             </div>
 
             <div class="btns" style="margin-top:12px;">
@@ -1698,6 +1719,8 @@
   const KEY_RQ_DONE_PREFIX = "qps_rq_done_ids_";   // + YYYY-MM-DD
   const KEY_RQ_CD          = "qps_rq_cooldown_until";
   const KEY_RQ_SEL         = "qps_rq_selected";
+  // AUTO-draft-report
+  const REPORT_DRAFT_KEY = "qps_report_draft_v1";
 
   /* =========================
     RULES
@@ -1994,6 +2017,7 @@
     reportMinutes: $("reportMinutes"),
     qualityBonus: $("qualityBonus"),
     notes: $("notes"),
+    draftHint: $("draftHint"),
     bonusRuleHint: $("bonusRuleHint"),
     capHint: $("capHint"),
     submitReportBtn: $("submitReportBtn"),
@@ -3357,6 +3381,8 @@
     setReportVisible(false);
     clearSubmitMessages();
     updateUI();
+    
+    if(el.draftHint) el.draftHint.style.display="none";
   }
 
   function submitReport(){
@@ -3364,33 +3390,25 @@
 
     const minutes = Number(el.reportMinutes?.value);
     if(!Number.isFinite(minutes) || minutes <= 0){
-      if(el.submitWarn){
-        el.submitWarn.style.display="block";
-        el.submitWarn.textContent="Minutes ต้อง > 0";
-      }
-      return;
-    }
-
-    applyBonusRule(minutes);
-    const bonus = el.qualityBonus?.disabled ? 0 : Number(el.qualityBonus?.value||0);
-
-    const dateKey = state.startDateKey || localDateKey();
-    const qn = normQuestName(state.questName);
-
-    if(isQuestNameDuplicateToday(dateKey, qn)){
-      if(el.submitWarn){
-        el.submitWarn.style.display="block";
-        el.submitWarn.textContent="ชื่อเควสซ้ำในวันนี้แล้ว — เปลี่ยนชื่อ";
-      }
-      return;
-    }
+  if(el.submitWarn){
+    el.submitWarn.style.display="block";
+    el.submitWarn.textContent="Minutes ต้อง > 0";
+  }
+  if(el.draftHint) el.draftHint.style.display="none";
+  return;
+}
+    
+const dateKey = state.startDateKey || localDateKey();
+const qn = normQuestName(state.questName);
+if(!qn){ showNameWarn("Quest Name ว่าง"); return; }
 
     const used = calcQuestBaseMinutesUsed(dateKey, qn);
     const remaining = Math.max(0, RULES.baseCapPerQuestNamePerDay - used);
     const baseMinutesUsed = Math.min(minutes, remaining);
 
-    const baseScore = baseMinutesUsed * RULES.basePerMinute;
-    const questScore = baseScore + bonus;
+  const baseScore = baseMinutesUsed * RULES.basePerMinute;
+const bonus = Number(el.qualityBonus?.value || 0);
+const questScore = baseScore + bonus;
 
     pushUndoSnapshot();
 
@@ -3428,6 +3446,7 @@
     }
 
     if(el.notes) el.notes.value = "";
+    clearReportDraft();
     setTimeout(()=>{ discardReport(); }, 320);
   }
 
@@ -3583,7 +3602,7 @@
       }
       saveAll(cur);
     }
-
+clearReportDraft();
     updateStreakAfterChange();
     selectedDay = localDateKey();
     updateUI();
@@ -3697,7 +3716,41 @@
     const seen = localStorage.getItem(KEY_ONBOARD) === "1";
     if(!seen) openOnboarding();
   }
+/* =========================
+   REPORT DRAFT SYSTEM
+========================= */
 
+function saveReportDraft(){
+  const draft = {
+    minutes: el.reportMinutes?.value || "",
+    bonus: el.qualityBonus?.value || "0",
+    notes: el.notes?.value || ""
+  };
+
+  localStorage.setItem(REPORT_DRAFT_KEY, JSON.stringify(draft));
+
+  if(el.draftHint){
+    el.draftHint.style.display = "block";
+  }
+}
+
+function loadReportDraft(){
+  const raw = localStorage.getItem(REPORT_DRAFT_KEY);
+  if(!raw) return;
+
+  try{
+    const d = JSON.parse(raw);
+
+    if(el.reportMinutes) el.reportMinutes.value = d.minutes || "";
+    if(el.qualityBonus) el.qualityBonus.value = d.bonus || "0";
+    if(el.notes) el.notes.value = d.notes || "";
+
+  }catch(e){}
+}
+
+function clearReportDraft(){
+  localStorage.removeItem(REPORT_DRAFT_KEY);
+}
   /* =========================
     EVENTS
   ========================= */
@@ -3706,7 +3759,7 @@
   on(el.pauseBtn, "click", pauseQuest);
   on(el.resumeBtn, "click", resumeQuest);
   on(el.stopBtn, "click", stopQuest);
-
+ 
   // report
   on(el.reportMinutes, "input", ()=>{
     const minutes = Number(el.reportMinutes?.value);
@@ -3714,6 +3767,10 @@
   });
   on(el.submitReportBtn, "click", submitReport);
   on(el.discardBtn, "click", discardReport);
+
+  on(el.reportMinutes, "input", saveReportDraft);
+on(el.qualityBonus, "change", saveReportDraft);
+on(el.notes, "input", saveReportDraft);
 
   // inputs
   on(el.category, "change", ()=>{
@@ -3729,6 +3786,7 @@
       clearNameWarn();
     }
   });
+clearReportDraft();
 
   // history
   on(el.historyBtn, "click", openHistory);
@@ -3986,6 +4044,9 @@
     loadGateCfg();
     loadGate();
     syncGateRuntimeFromCfg();
+
+     loadReportDraft();
+
 
     if(state.status==="running" && !state.startTs){
       state.status="paused";
